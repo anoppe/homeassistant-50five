@@ -1,0 +1,14 @@
+{
+  "domain": "fifty_five",
+  "name": "50Five EV Charger",
+  "codeowners": ["@anoppe"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/anoppe/homeassistant-50five",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/anoppe/homeassistant-50five/issues",
+  "requirements": [],
+  "version": "1.0.0",
+  "integration_type": "device"
+}
+

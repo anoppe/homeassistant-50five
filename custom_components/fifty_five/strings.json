@@ -1,0 +1,81 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "50Five EV Charger",
+        "description": "Enter your 50Five credentials. Your charger will be discovered automatically.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        },
+        "data_description": {
+          "email": "Your 50Five account email address",
+          "password": "Your 50Five account password"
+        }
+      },
+      "select_station": {
+        "title": "Select Charge Station",
+        "description": "Multiple charge stations were found. Please select the one you want to configure.",
+        "data": {
+          "charge_station": "Charge Station"
+        }
+      },
+      "manual": {
+        "title": "Manual Configuration",
+        "description": "No charge station could be discovered automatically. Please enter the details manually.",
+        "data": {
+          "charge_station_id": "Charge Station ID",
+          "channel_id": "Channel ID"
+        },
+        "data_description": {
+          "charge_station_id": "The ID of your charge station (found in the app)",
+          "channel_id": "The channel ID of your charger connector"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to 50Five API",
+      "invalid_auth": "Invalid email or password",
+      "no_customer_id": "Could not retrieve customer information from 50Five",
+      "unknown": "An unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "This charger is already configured"
+    }
+  },
+  "entity": {
+    "switch": {
+      "charging": {
+        "name": "Charging",
+        "state": {
+          "on": "Charging",
+          "off": "Not charging"
+        },
+        "state_attributes": {
+          "action": {
+            "name": "Action",
+            "state": {
+              "Start Charging": "Start Charging",
+              "Stop Charging": "Stop Charging"
+            }
+          },
+          "status": {
+            "name": "Status"
+          },
+          "channel_status": {
+            "name": "Channel Status"
+          },
+          "energy_delivered": {
+            "name": "Energy Delivered"
+          },
+          "duration_minutes": {
+            "name": "Duration"
+          },
+          "current_cost": {
+            "name": "Current Cost"
+          }
+        }
+      }
+    }
+  }
+}

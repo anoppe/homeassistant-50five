@@ -1,0 +1,157 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "50Five EV Charger",
+        "description": "Enter your 50Five credentials. Your charger will be discovered automatically.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        },
+        "data_description": {
+          "email": "Your 50Five account email address",
+          "password": "Your 50Five account password"
+        }
+      },
+      "select_station": {
+        "title": "Select Charge Station",
+        "description": "Multiple charge stations were found. Please select the one you want to configure.",
+        "data": {
+          "charge_station": "Charge Station"
+        }
+      },
+      "manual": {
+        "title": "Manual Configuration",
+        "description": "No charge station could be discovered automatically. Please enter the details manually.",
+        "data": {
+          "charge_station_id": "Charge Station ID",
+          "channel_id": "Channel ID"
+        },
+        "data_description": {
+          "charge_station_id": "The ID of your charge station (found in the app)",
+          "channel_id": "The channel ID of your charger connector"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to 50Five API",
+      "invalid_auth": "Invalid email or password",
+      "no_customer_id": "Could not retrieve customer information from 50Five",
+      "unknown": "An unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "This charger is already configured"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "channel_status": {
+        "name": "Channel Status"
+      },
+      "authorization_mode": {
+        "name": "Authorization Mode"
+      },
+      "access_type": {
+        "name": "Access Type"
+      },
+      "published_on_map": {
+        "name": "Published on Map"
+      },
+      "hcc_enabled": {
+        "name": "Home Charging Compensation"
+      },
+      "hcc_tariff": {
+        "name": "HCC Tariff (excl. VAT)"
+      },
+      "hcc_tariff_incl_vat": {
+        "name": "HCC Tariff (incl. VAT)"
+      },
+      "active_transaction_energy": {
+        "name": "Active Transaction Energy"
+      },
+      "active_transaction_duration": {
+        "name": "Active Transaction Duration"
+      },
+      "active_transaction_amount": {
+        "name": "Active Transaction Amount"
+      },
+      "active_transaction_address": {
+        "name": "Active Transaction Address"
+      },
+      "reservation_status": {
+        "name": "Reservation Status"
+      },
+      "history_transaction_count": {
+        "name": "Transactions (30 days)"
+      },
+      "history_total_energy": {
+        "name": "Total Energy (30 days)"
+      },
+      "history_total_cost": {
+        "name": "Total Cost (30 days)"
+      },
+      "history_total_reimbursement": {
+        "name": "HCC Reimbursement (30 days)"
+      },
+      "last_transaction_date": {
+        "name": "Last Transaction Date"
+      },
+      "last_transaction_energy": {
+        "name": "Last Transaction Energy"
+      },
+      "last_transaction_duration": {
+        "name": "Last Transaction Duration"
+      },
+      "last_transaction_cost": {
+        "name": "Last Transaction Cost"
+      },
+      "charge_card_count": {
+        "name": "Charge Cards"
+      },
+      "charge_cards_summary": {
+        "name": "Charge Cards Details"
+      }
+    },
+    "button": {
+      "start_transaction": {
+        "name": "Start Transaction"
+      },
+      "stop_transaction": {
+        "name": "Stop Transaction"
+      }
+    },
+    "switch": {
+      "charging": {
+        "name": "Charging",
+        "state": {
+          "on": "Charging",
+          "off": "Not charging"
+        },
+        "state_attributes": {
+          "action": {
+            "name": "Action",
+            "state": {
+              "Start Charging": "Start Charging",
+              "Stop Charging": "Stop Charging"
+            }
+          },
+          "status": {
+            "name": "Status"
+          },
+          "channel_status": {
+            "name": "Channel Status"
+          },
+          "energy_delivered": {
+            "name": "Energy Delivered"
+          },
+          "duration_minutes": {
+            "name": "Duration"
+          },
+          "current_cost": {
+            "name": "Current Cost"
+          }
+        }
+      }
+    }
+  }
+}
