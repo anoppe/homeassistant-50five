@@ -48,15 +48,15 @@
       "charging": {
         "name": "Charging",
         "state": {
-          "on": "Charging",
-          "off": "Not charging"
+          "on": "Stop Charging",
+          "off": "Start Charging"
         },
         "state_attributes": {
           "action": {
             "name": "Action",
             "state": {
-              "Start Charging": "Start Charging",
-              "Stop Charging": "Stop Charging"
+              "start_charging": "Start Charging",
+              "stop_charging": "Stop Charging"
             }
           },
           "status": {
