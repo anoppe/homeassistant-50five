@@ -58,7 +58,7 @@ entities:
   - entity: sensor.50five_charger_hcc_enabled
   - entity: sensor.50five_charger_active_transaction_energy
   - entity: sensor.50five_charger_active_transaction_duration
-  - entity: button.50five_charger_start_transaction
+  - entity: switch.50five_charger_charging
 ```
 
 ### Charging History Card

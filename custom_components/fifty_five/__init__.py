@@ -15,7 +15,7 @@ from .api import FiftyFiveApiClient
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH, Platform.BUTTON]
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH]
 
 SCAN_INTERVAL = timedelta(seconds=30)
 

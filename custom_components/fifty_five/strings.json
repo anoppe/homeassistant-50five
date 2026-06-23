@@ -46,10 +46,10 @@
   "entity": {
     "switch": {
       "charging": {
-        "name": "Charging",
+        "name": "Charger",
         "state": {
-          "on": "Stop Charging",
-          "off": "Start Charging"
+          "on": "Charging",
+          "off": "Not charging"
         },
         "state_attributes": {
           "action": {

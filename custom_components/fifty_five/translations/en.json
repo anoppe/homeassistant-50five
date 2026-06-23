@@ -112,17 +112,9 @@
         "name": "Charge Cards Details"
       }
     },
-    "button": {
-      "start_transaction": {
-        "name": "Start Transaction"
-      },
-      "stop_transaction": {
-        "name": "Stop Transaction"
-      }
-    },
     "switch": {
       "charging": {
-        "name": "Charging",
+        "name": "Charger",
         "state": {
           "on": "Charging",
           "off": "Not charging"
