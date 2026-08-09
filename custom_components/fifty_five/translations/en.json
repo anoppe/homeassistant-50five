@@ -112,6 +112,11 @@
         "name": "Charge Cards Details"
       }
     },
+    "select": {
+      "charge_card": {
+        "name": "Charge Card"
+      }
+    },
     "switch": {
       "charging": {
         "name": "Charger",

@@ -1,6 +1,7 @@
 {
   "name": "50Five EV Charger",
   "homeassistant": "2026.6.4",
-  "render_readme": true
+  "render_readme": true,
+  "country" : ["NL"]
 }
 

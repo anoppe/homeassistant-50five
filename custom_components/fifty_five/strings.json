@@ -44,6 +44,14 @@
     }
   },
   "entity": {
+    "select": {
+      "charge_card": {
+        "name": "Charge Card",
+        "state": {
+          "none_no_default_card": "None (No default card)"
+        }
+      }
+    },
     "switch": {
       "charging": {
         "name": "Charger",

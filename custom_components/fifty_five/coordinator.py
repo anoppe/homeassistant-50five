@@ -44,6 +44,7 @@ class FiftyFiveDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._cached_history: list[dict[str, Any]] = []
         self._pending_action: bool = False
         self._rapid_poll_task: asyncio.Task | None = None
+        self._selected_card_id: str | None = None
         _LOGGER.debug(
             "Coordinator initialized with update interval: %s seconds, history interval: %s seconds",
             update_interval.total_seconds(),
@@ -54,6 +55,16 @@ class FiftyFiveDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def is_pending_action(self) -> bool:
         """Return True if waiting for a state change after action."""
         return self._pending_action
+
+    @property
+    def selected_card_id(self) -> str | None:
+        """Return the currently selected charge card ID."""
+        return self._selected_card_id
+
+    def set_selected_card(self, card_id: str | None) -> None:
+        """Set the default charge card ID."""
+        self._selected_card_id = card_id
+        _LOGGER.info("Default charge card set to: %s", card_id or "(none)")
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from API."""
@@ -142,7 +153,9 @@ class FiftyFiveDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def async_start_transaction(self, card: str = "") -> bool:
         """Start a charging transaction."""
-        _LOGGER.debug("Coordinator: Start transaction requested (card: %s)", card or "(none)")
+        # Use provided card, or fall back to selected default card
+        card_to_use = card if card else (self._selected_card_id or "")
+        _LOGGER.debug("Coordinator: Start transaction requested (card: %s)", card_to_use or "(none)")
         
         # Cancel any existing rapid poll task
         if self._rapid_poll_task and not self._rapid_poll_task.done():
@@ -151,7 +164,7 @@ class FiftyFiveDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._pending_action = True
         self.async_update_listeners()
         
-        result = await self.client.start_transaction(card)
+        result = await self.client.start_transaction(card_to_use)
         _LOGGER.debug("Coordinator: Start transaction result: %s", result)
         
         if result:
