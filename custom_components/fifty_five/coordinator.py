@@ -19,8 +19,8 @@ _LOGGER = logging.getLogger(__name__)
 HISTORY_UPDATE_INTERVAL = timedelta(minutes=10)
 
 # Rapid polling settings after start/stop actions
-RAPID_POLL_INTERVAL = 5  # seconds
-RAPID_POLL_TIMEOUT = 20  # seconds (max time to poll rapidly)
+RAPID_POLL_INTERVAL = 10  # seconds
+RAPID_POLL_MAX_ATTEMPTS = 3
 
 
 class FiftyFiveDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -119,37 +119,67 @@ class FiftyFiveDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise UpdateFailed(f"Error fetching data: {err}") from err
 
     async def _rapid_poll_until_state_change(self, expected_charging: bool) -> None:
-        """Poll rapidly until the charging state matches expected or timeout."""
-        _LOGGER.debug("Coordinator: Starting rapid polling, expecting charging=%s", expected_charging)
-        start_time = dt_util.utcnow()
-        
-        while (dt_util.utcnow() - start_time).total_seconds() < RAPID_POLL_TIMEOUT:
-            await asyncio.sleep(RAPID_POLL_INTERVAL)
-            
-            try:
+        """Poll for state changes after start/stop using event-driven waits."""
+        _LOGGER.debug(
+            "Coordinator: Starting rapid polling, expecting charging=%s",
+            expected_charging,
+        )
+
+        state_changed_event = asyncio.Event()
+
+        def _is_expected_state() -> bool:
+            """Check if coordinator data already reflects the expected charging state."""
+            if not self.data:
+                return False
+            has_active = self.data.get("active_transaction") is not None
+            channel_status = self.data.get("channel", {}).get("globalStatus", "").lower()
+            is_charging = has_active or channel_status in ("charging", "occupied", "busy")
+            _LOGGER.debug(
+                "Coordinator: Rapid poll check - is_charging=%s, expected=%s",
+                is_charging,
+                expected_charging,
+            )
+            return is_charging == expected_charging
+
+        def _on_coordinator_update() -> None:
+            """Signal polling loop when data update reaches expected state."""
+            if _is_expected_state():
+                state_changed_event.set()
+
+        remove_listener = self.async_add_listener(_on_coordinator_update)
+
+        try:
+            if _is_expected_state():
+                _LOGGER.debug("Coordinator: Expected state already reached, skipping rapid poll")
+                return
+
+            for attempt in range(1, RAPID_POLL_MAX_ATTEMPTS + 1):
+                _LOGGER.debug(
+                    "Coordinator: Rapid poll attempt %s/%s in %ss",
+                    attempt,
+                    RAPID_POLL_MAX_ATTEMPTS,
+                    RAPID_POLL_INTERVAL,
+                )
+
+                try:
+                    await asyncio.wait_for(state_changed_event.wait(), timeout=RAPID_POLL_INTERVAL)
+                    _LOGGER.debug("Coordinator: Expected state received via coordinator update")
+                    break
+                except TimeoutError:
+                    pass
+
                 await self.async_request_refresh()
-                
-                # Check if state has changed to expected
-                if self.data:
-                    has_active = self.data.get("active_transaction") is not None
-                    channel_status = self.data.get("channel", {}).get("globalStatus", "").lower()
-                    is_charging = has_active or channel_status in ("charging", "occupied", "busy")
-                    
-                    _LOGGER.debug(
-                        "Coordinator: Rapid poll check - is_charging=%s, expected=%s",
-                        is_charging, expected_charging
-                    )
-                    
-                    if is_charging == expected_charging:
-                        _LOGGER.debug("Coordinator: State changed to expected, stopping rapid poll")
-                        break
-            except Exception as err:
-                _LOGGER.debug("Coordinator: Rapid poll error: %s", err)
-        
-        self._pending_action = False
-        # Notify listeners that pending state has changed
-        self.async_update_listeners()
-        _LOGGER.debug("Coordinator: Rapid polling complete")
+                if _is_expected_state():
+                    _LOGGER.debug("Coordinator: State changed to expected after refresh")
+                    break
+        except Exception as err:
+            _LOGGER.debug("Coordinator: Rapid poll error: %s", err)
+        finally:
+            remove_listener()
+            self._pending_action = False
+            # Notify listeners that pending state has changed
+            self.async_update_listeners()
+            _LOGGER.debug("Coordinator: Rapid polling complete")
 
     async def async_start_transaction(self, card: str = "") -> bool:
         """Start a charging transaction."""
