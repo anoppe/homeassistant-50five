@@ -6,11 +6,11 @@ from typing import Any
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_DEFAULT_CARD_ID
 from .coordinator import FiftyFiveDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -65,8 +65,7 @@ class FiftyFiveChargeCardSelect(CoordinatorEntity, SelectEntity):
         for card in cards:
             external_id = card.get("externalId", "Unknown")
             provider = card.get("cardProvider", {}).get("name", "Unknown")
-            state = card.get("state", "")
-            
+
             # Format: "Card 1234567890 (50Five)"
             option = f"Card {external_id} ({provider})"
             options.append(option)
@@ -95,8 +94,9 @@ class FiftyFiveChargeCardSelect(CoordinatorEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Handle option selection."""
+        selected_card_id: str | None = None
+
         if option == NONE_OPTION:
-            self.coordinator.set_selected_card(None)
             _LOGGER.info("Default charge card cleared")
         else:
             # Parse the option to extract card ID
@@ -110,11 +110,23 @@ class FiftyFiveChargeCardSelect(CoordinatorEntity, SelectEntity):
                 expected_option = f"Card {external_id} ({provider})"
                 
                 if expected_option == option:
-                    card_id = card["id"]
-                    self.coordinator.set_selected_card(card_id)
-                    _LOGGER.info("Default charge card set to: %s (ID: %s)", option, card_id)
+                    selected_card_id = card["id"]
+                    _LOGGER.info("Default charge card set to: %s (ID: %s)", option, selected_card_id)
                     break
-        
+
+            if selected_card_id is None:
+                _LOGGER.warning("Selected charge card option not found in current card list: %s", option)
+                return
+
+        updated_options = dict(self._entry.options)
+        if selected_card_id is None:
+            updated_options.pop(CONF_DEFAULT_CARD_ID, None)
+        else:
+            updated_options[CONF_DEFAULT_CARD_ID] = selected_card_id
+
+        self.hass.config_entries.async_update_entry(self._entry, options=updated_options)
+        self.coordinator.set_selected_card(selected_card_id)
+
         self.async_write_ha_state()
 
     @property

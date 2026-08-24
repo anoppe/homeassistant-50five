@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from homeassistant.components import persistent_notification
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -104,6 +105,12 @@ class FiftyFiveChargingSwitch(
             _LOGGER.info("Transaction start command sent, waiting for confirmation...")
         else:
             _LOGGER.error("Failed to start transaction")
+            persistent_notification.async_create(
+                self.hass,
+                "Failed to start charging transaction. Check charger availability, card validity and integration logs.",
+                title="50Five Charger",
+                notification_id=f"{self.entity_id}_start_failed",
+            )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off charging (stop transaction)."""

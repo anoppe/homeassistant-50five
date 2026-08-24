@@ -9,7 +9,13 @@ from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DOMAIN, CONF_CHARGE_STATION_ID, CONF_CHANNEL_ID, CONF_CUSTOMER_ID
+from .const import (
+    DOMAIN,
+    CONF_CHARGE_STATION_ID,
+    CONF_CHANNEL_ID,
+    CONF_CUSTOMER_ID,
+    CONF_DEFAULT_CARD_ID,
+)
 from .coordinator import FiftyFiveDataUpdateCoordinator
 from .api import FiftyFiveApiClient
 
@@ -40,6 +46,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         client=client,
         update_interval=SCAN_INTERVAL,
     )
+    coordinator.set_selected_card(entry.options.get(CONF_DEFAULT_CARD_ID))
 
     await coordinator.async_config_entry_first_refresh()
 

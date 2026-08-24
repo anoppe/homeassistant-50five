@@ -6,6 +6,7 @@ DOMAIN = "fifty_five"
 CONF_CHARGE_STATION_ID = "charge_station_id"
 CONF_CHANNEL_ID = "channel_id"
 CONF_CUSTOMER_ID = "customer_id"
+CONF_DEFAULT_CARD_ID = "default_card_id"
 
 # API
 API_URL = "https://lms.servicelayer.platform-01.plugz.dev/graphql"
