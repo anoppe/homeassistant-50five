@@ -82,7 +82,15 @@ class FiftyFiveChargeCardSelect(CoordinatorEntity, SelectEntity):
             return NONE_OPTION
         
         cards = self.coordinator.data.get("charge_cards", [])
-        selected_card = next((c for c in cards if c["id"] == selected_card_id), None)
+        # Prefer externalId for current behavior, but keep legacy fallback for stored internal id.
+        selected_card = next(
+            (
+                c
+                for c in cards
+                if c.get("externalId") == selected_card_id or c.get("id") == selected_card_id
+            ),
+            None,
+        )
         
         if selected_card:
             external_id = selected_card.get("externalId", "Unknown")
@@ -110,8 +118,8 @@ class FiftyFiveChargeCardSelect(CoordinatorEntity, SelectEntity):
                 expected_option = f"Card {external_id} ({provider})"
                 
                 if expected_option == option:
-                    selected_card_id = card["id"]
-                    _LOGGER.info("Default charge card set to: %s (ID: %s)", option, selected_card_id)
+                    selected_card_id = card.get("externalId")
+                    _LOGGER.info("Default charge card set to: %s (external ID: %s)", option, selected_card_id)
                     break
 
             if selected_card_id is None:
@@ -138,7 +146,14 @@ class FiftyFiveChargeCardSelect(CoordinatorEntity, SelectEntity):
             return {}
         
         cards = self.coordinator.data.get("charge_cards", [])
-        selected_card = next((c for c in cards if c["id"] == selected_card_id), None)
+        selected_card = next(
+            (
+                c
+                for c in cards
+                if c.get("externalId") == selected_card_id or c.get("id") == selected_card_id
+            ),
+            None,
+        )
         
         if selected_card:
             return {
