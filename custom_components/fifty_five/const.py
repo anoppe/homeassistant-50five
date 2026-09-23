@@ -9,7 +9,10 @@ CONF_CUSTOMER_ID = "customer_id"
 CONF_DEFAULT_CARD_ID = "default_card_id"
 
 # API
-API_URL = "https://lms.servicelayer.platform-01.plugz.io/graphql"
+# Test environment url:
+# API_URL = "https://lms.servicelayer.platform-test.plugz.dev/graphql"
+# Production environment url:
+API_URL = "https://lms.servicelayer.platform-01.plugz.dev/graphql"
 APPLICATION_ID = "27ce6f0c-d987-4d6f-b0a3-aea459a90c1f"
 
 # GraphQL Queries
