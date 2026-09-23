@@ -205,6 +205,37 @@ fragment ActiveTransaction on Transaction {
 }
 """
 
+ACTIVE_TRANSACTION = """
+query ActiveTransaction {
+    activeTransaction {
+        ...ActiveTransaction
+        __typename
+    }
+}
+
+fragment ActiveTransaction on Transaction {
+    updateDate
+    address
+    zipCode
+    city
+    energyDelivered
+    startDate
+    countryCode
+    currency
+    totalAmount
+    vat
+    durationCharging
+    priceElements {
+        type
+        price
+        __typename
+    }
+    tariffId
+    channelVisibleId
+    __typename
+}
+"""
+
 START_TRANSACTION_MUTATION = """
 mutation StartTransaction($chargeStationId: ID!, $channelId: ID!, $card: String) {
     startTransaction(chargeStationId: $chargeStationId, channelId: $channelId, card: $card)

@@ -9,6 +9,7 @@ from typing import Any
 import aiohttp
 
 from .const import (
+    ACTIVE_TRANSACTION,
     API_URL,
     APPLICATION_ID,
     LOGIN_MUTATION,
@@ -314,8 +315,26 @@ class FiftyFiveApiClient:
             operation_name="LmsActiveTransaction",
         )
         result = data.get("lmsActiveTransaction")
-        _LOGGER.debug("Active transaction result: %s", result)
-        return result
+        if result is not None:
+            _LOGGER.debug("Active transaction result: %s", result)
+            return result
+
+        _LOGGER.debug(
+            "LMS active transaction query returned no data; trying activeTransaction fallback"
+        )
+
+        try:
+            fallback_data = await self._execute_query(
+                query=ACTIVE_TRANSACTION,
+                operation_name="ActiveTransaction",
+            )
+        except FiftyFiveApiError as err:
+            _LOGGER.debug("Active transaction fallback query failed: %s", err)
+            return None
+
+        fallback_result = fallback_data.get("activeTransaction")
+        _LOGGER.debug("Active transaction fallback result: %s", fallback_result)
+        return fallback_result
 
     async def get_active_reservation(self) -> dict[str, Any] | None:
         """Get the active reservation."""

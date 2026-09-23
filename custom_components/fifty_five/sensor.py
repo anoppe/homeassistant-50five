@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
-from datetime import datetime
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -23,6 +23,138 @@ from .const import DOMAIN
 from .coordinator import FiftyFiveDataUpdateCoordinator
 
 
+def _coerce_number(value: Any) -> float | int | None:
+    """Convert API values to a numeric type when possible."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().replace(",", ".")
+        if not normalized:
+            return None
+        try:
+            number = float(normalized)
+        except ValueError:
+            return None
+        return int(number) if number.is_integer() else number
+    return None
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    """Parse an ISO datetime value from the API."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _get_transaction_costs(transaction: dict[str, Any]) -> list[float]:
+    """Extract numeric transaction costs."""
+    costs: list[float] = []
+    for price in transaction.get("transactionPrices", []):
+        cost = _coerce_number(price.get("totalCost"))
+        if cost is not None:
+            costs.append(float(cost))
+    return costs
+
+
+def _get_latest_transaction(data: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the latest transaction from charging history."""
+    history = data.get("charging_history", [])
+    if not history:
+        return None
+    return history[0]
+
+
+def _get_active_transaction_data(data: dict[str, Any]) -> dict[str, Any] | None:
+    """Return active transaction data when present."""
+    active_transaction = data.get("active_transaction")
+    return active_transaction if isinstance(active_transaction, dict) else None
+
+
+def _normalize_duration_minutes(duration: Any, *, energy_kwh: Any = None) -> int | None:
+    """Normalize API duration values to minutes.
+
+    The 50Five API has returned duration values in different units depending on
+    the endpoint/account: minutes, seconds, milliseconds, and occasionally hour-like
+    values for completed sessions. This helper converts them to minutes using a small
+    heuristic that prefers the least surprising value.
+    """
+    numeric_duration = _coerce_number(duration)
+    if numeric_duration is None:
+        return None
+
+    value = float(numeric_duration)
+    if value < 0:
+        return None
+    if value == 0:
+        return 0
+
+    if value >= 86_400:
+        return round(value / 60_000)
+
+    if value > 1_440:
+        return round(value / 60)
+
+    energy_value = _coerce_number(energy_kwh)
+    if energy_value is not None and 0 < value <= 24:
+        minimum_plausible_minutes = (float(energy_value) / 22.0) * 60
+        if minimum_plausible_minutes > 0 and value < (minimum_plausible_minutes * 0.75):
+            return round(value * 60)
+
+    return round(value)
+
+
+def _get_active_transaction_energy(data: dict[str, Any]) -> float | int | None:
+    """Get the delivered energy for the active transaction."""
+    active_transaction = _get_active_transaction_data(data)
+    if not active_transaction:
+        return None
+    return _coerce_number(active_transaction.get("energyDelivered"))
+
+
+def _get_active_transaction_duration(data: dict[str, Any]) -> int | None:
+    """Get the active transaction duration in minutes."""
+    active_transaction = _get_active_transaction_data(data)
+    if not active_transaction:
+        return None
+
+    duration = _normalize_duration_minutes(
+        active_transaction.get("durationCharging"),
+        energy_kwh=active_transaction.get("energyDelivered"),
+    )
+    if duration is not None:
+        return duration
+
+    start_date = _parse_datetime(active_transaction.get("startDate"))
+    if start_date is None:
+        return None
+
+    return max(round((datetime.now(timezone.utc) - start_date).total_seconds() / 60), 0)
+
+
+def _get_active_transaction_amount(data: dict[str, Any]) -> float | int | None:
+    """Get the running amount for the active transaction."""
+    active_transaction = _get_active_transaction_data(data)
+    if not active_transaction:
+        return None
+    return _coerce_number(active_transaction.get("totalAmount"))
+
+
+def _get_active_transaction_address(data: dict[str, Any]) -> str | None:
+    """Get the address for the active transaction."""
+    active_transaction = _get_active_transaction_data(data)
+    if not active_transaction:
+        return None
+    return active_transaction.get("address")
+
+
 def _get_history_total_energy(data: dict[str, Any]) -> float | None:
     """Calculate total energy from charging history."""
     history = data.get("charging_history", [])
@@ -33,18 +165,15 @@ def _get_history_total_energy(data: dict[str, Any]) -> float | None:
 
 
 def _get_history_total_cost(data: dict[str, Any]) -> float | None:
-    """Calculate total cost from charging history (excluding HCC reimbursements)."""
+    """Calculate total cost from charging history."""
     history = data.get("charging_history", [])
     if not history:
         return None
     total = 0.0
     for item in history:
-        prices = item.get("transactionPrices", [])
-        for price in prices:
-            cost = price.get("totalCost")
-            # Only sum positive costs (actual charges, not HCC reimbursements)
-            if cost and cost > 0:
-                total += cost
+        for cost in _get_transaction_costs(item):
+            if cost:
+                total += abs(cost)
     return round(total, 2)
 
 
@@ -55,9 +184,7 @@ def _get_history_total_reimbursement(data: dict[str, Any]) -> float | None:
         return None
     total = 0.0
     for item in history:
-        prices = item.get("transactionPrices", [])
-        for price in prices:
-            cost = price.get("totalCost")
+        for cost in _get_transaction_costs(item):
             # Sum negative costs (HCC reimbursements) as positive value
             if cost and cost < 0:
                 total += abs(cost)
@@ -72,10 +199,9 @@ def _get_history_transaction_count(data: dict[str, Any]) -> int | None:
 
 def _get_last_transaction_date(data: dict[str, Any]) -> str | None:
     """Get the date of the last transaction."""
-    history = data.get("charging_history", [])
-    if not history:
+    last = _get_latest_transaction(data)
+    if not last:
         return None
-    last = history[0]  # Already sorted by startDate desc
     start_date = last.get("startDate")
     if start_date:
         try:
@@ -88,36 +214,41 @@ def _get_last_transaction_date(data: dict[str, Any]) -> str | None:
 
 def _get_last_transaction_energy(data: dict[str, Any]) -> float | None:
     """Get the energy of the last transaction."""
-    history = data.get("charging_history", [])
-    if not history:
+    last = _get_latest_transaction(data)
+    if not last:
         return None
-    return history[0].get("totalEnergy")
+    energy = _coerce_number(last.get("totalEnergy"))
+    return float(energy) if isinstance(energy, int | float) else None
 
 
 def _get_last_transaction_duration(data: dict[str, Any]) -> int | None:
     """Get the duration of the last transaction in minutes."""
-    history = data.get("charging_history", [])
-    if not history:
+    last = _get_latest_transaction(data)
+    if not last:
         return None
-    duration = history[0].get("totalDuration")
-    if duration:
-        # Duration is in seconds, convert to minutes
-        return round(duration / 60)
-    return None
+    return _normalize_duration_minutes(
+        last.get("totalDuration"),
+        energy_kwh=last.get("totalEnergy"),
+    )
 
 
 def _get_last_transaction_cost(data: dict[str, Any]) -> float | None:
-    """Get the cost of the last transaction (excluding HCC reimbursement)."""
-    history = data.get("charging_history", [])
-    if not history:
+    """Get the cost of the last transaction.
+
+    The API can return a negative net cost for HCC/reimbursement transactions.
+    Display the absolute value as a positive charge amount for Home Assistant.
+    """
+    last = _get_latest_transaction(data)
+    if not last:
         return None
-    prices = history[0].get("transactionPrices", [])
-    for price in prices:
-        cost = price.get("totalCost")
-        # Return the positive cost (actual charge, not reimbursement)
-        if cost and cost > 0:
-            return cost
-    return None
+    costs = _get_transaction_costs(last)
+    if not costs:
+        return None
+
+    total_cost = round(sum(costs), 2)
+    if total_cost < 0:
+        return abs(total_cost)
+    return total_cost if total_cost > 0 else 0.0
 
 
 def _get_history_currency(data: dict[str, Any]) -> str | None:
@@ -218,7 +349,7 @@ SENSOR_DESCRIPTIONS: tuple[FiftyFiveSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        value_fn=lambda data: data.get("active_transaction", {}).get("energyDelivered") if data.get("active_transaction") else None,
+        value_fn=_get_active_transaction_energy,
     ),
     FiftyFiveSensorEntityDescription(
         key="active_transaction_duration",
@@ -226,19 +357,19 @@ SENSOR_DESCRIPTIONS: tuple[FiftyFiveSensorEntityDescription, ...] = (
         icon="mdi:timer",
         native_unit_of_measurement=UnitOfTime.MINUTES,
         device_class=SensorDeviceClass.DURATION,
-        value_fn=lambda data: data.get("active_transaction", {}).get("durationCharging") if data.get("active_transaction") else None,
+        value_fn=_get_active_transaction_duration,
     ),
     FiftyFiveSensorEntityDescription(
         key="active_transaction_amount",
         name="Active Transaction Amount",
         icon="mdi:cash",
-        value_fn=lambda data: data.get("active_transaction", {}).get("totalAmount") if data.get("active_transaction") else None,
+        value_fn=_get_active_transaction_amount,
     ),
     FiftyFiveSensorEntityDescription(
         key="active_transaction_address",
         name="Active Transaction Address",
         icon="mdi:map-marker",
-        value_fn=lambda data: data.get("active_transaction", {}).get("address") if data.get("active_transaction") else None,
+        value_fn=_get_active_transaction_address,
     ),
     FiftyFiveSensorEntityDescription(
         key="reservation_status",
