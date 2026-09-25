@@ -9,7 +9,6 @@ from typing import Any
 import aiohttp
 
 from .const import (
-    ACTIVE_TRANSACTION,
     API_URL,
     APPLICATION_ID,
     LOGIN_MUTATION,
@@ -75,6 +74,15 @@ def _decode_jwt_payload(token: str) -> dict[str, Any]:
     except Exception as err:
         _LOGGER.debug("Failed to decode JWT payload: %s", err)
         return {}
+
+
+def _is_charging_channel(channel: dict[str, Any] | None) -> bool:
+    """Return True when the charger channel looks like it is actively charging."""
+    if not channel:
+        return False
+
+    channel_status = str(channel.get("globalStatus", "")).lower()
+    return channel_status in ("charging", "occupied", "busy")
 
 
 class FiftyFiveApiError(Exception):
@@ -315,26 +323,8 @@ class FiftyFiveApiClient:
             operation_name="LmsActiveTransaction",
         )
         result = data.get("lmsActiveTransaction")
-        if result is not None:
-            _LOGGER.debug("Active transaction result: %s", result)
-            return result
-
-        _LOGGER.debug(
-            "LMS active transaction query returned no data; trying activeTransaction fallback"
-        )
-
-        try:
-            fallback_data = await self._execute_query(
-                query=ACTIVE_TRANSACTION,
-                operation_name="ActiveTransaction",
-            )
-        except FiftyFiveApiError as err:
-            _LOGGER.debug("Active transaction fallback query failed: %s", err)
-            return None
-
-        fallback_result = fallback_data.get("activeTransaction")
-        _LOGGER.debug("Active transaction fallback result: %s", fallback_result)
-        return fallback_result
+        _LOGGER.debug("Active transaction result: %s", result)
+        return result
 
     async def get_active_reservation(self) -> dict[str, Any] | None:
         """Get the active reservation."""
@@ -438,7 +428,14 @@ class FiftyFiveApiClient:
         _LOGGER.debug("Fetching realtime charger data...")
         overview = await self.get_charge_station_overview()
         channel = await self.get_charge_station_channel()
-        active_transaction = await self.get_active_transaction()
+
+        if _is_charging_channel(channel):
+            _LOGGER.debug("Channel indicates charging; fetching active transaction")
+            active_transaction = await self.get_active_transaction()
+        else:
+            _LOGGER.debug("Channel is not charging; skipping active transaction fetch")
+            active_transaction = None
+
         active_reservation = await self.get_active_reservation()
         charge_cards = await self.get_charge_cards()
 
