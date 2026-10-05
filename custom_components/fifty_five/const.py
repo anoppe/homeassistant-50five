@@ -1,6 +1,50 @@
 """Constants for the 50Five EV Charger integration."""
 
+from __future__ import annotations
+
+from typing import Any
+
 DOMAIN = "fifty_five"
+
+# Channel/global status values documented by 50Five
+GLOBAL_STATUS_AVAILABLE = "Available"
+GLOBAL_STATUS_RESERVED = "Reserved"
+GLOBAL_STATUS_CHARGING = "Charging"
+GLOBAL_STATUS_UNAVAILABLE = "Unavailable"
+GLOBAL_STATUS_NO_COMMUNICATION = "NoCommunication"
+GLOBAL_STATUS_POWERED_OFF = "PoweredOff"
+GLOBAL_STATUS_FAULTY = "Faulty"
+GLOBAL_STATUS_UNKNOWN = "Unknown"
+
+KNOWN_GLOBAL_STATUSES = (
+    GLOBAL_STATUS_AVAILABLE,
+    GLOBAL_STATUS_RESERVED,
+    GLOBAL_STATUS_CHARGING,
+    GLOBAL_STATUS_UNAVAILABLE,
+    GLOBAL_STATUS_NO_COMMUNICATION,
+    GLOBAL_STATUS_POWERED_OFF,
+    GLOBAL_STATUS_FAULTY,
+    GLOBAL_STATUS_UNKNOWN,
+)
+
+_GLOBAL_STATUS_LOOKUP = {status.lower(): status for status in KNOWN_GLOBAL_STATUSES}
+
+
+def normalize_global_status(status: Any) -> str | None:
+    """Return the documented 50Five status casing when recognized."""
+    if status is None:
+        return None
+
+    normalized = str(status).strip()
+    if not normalized:
+        return None
+
+    return _GLOBAL_STATUS_LOOKUP.get(normalized.lower(), normalized)
+
+
+def is_charging_global_status(status: Any) -> bool:
+    """Return True when a documented channel status means active charging."""
+    return normalize_global_status(status) == GLOBAL_STATUS_CHARGING
 
 # Configuration
 CONF_CHARGE_STATION_ID = "charge_station_id"

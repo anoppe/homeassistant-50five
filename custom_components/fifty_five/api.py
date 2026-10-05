@@ -11,6 +11,7 @@ import aiohttp
 from .const import (
     API_URL,
     APPLICATION_ID,
+    GLOBAL_STATUS_CHARGING,
     LOGIN_MUTATION,
     GET_CHARGE_STATION_OVERVIEW,
     GET_CHARGE_STATION_CHANNEL,
@@ -21,6 +22,8 @@ from .const import (
     GET_CHARGING_HISTORY,
     GET_CUSTOMER_WITH_CHARGE_STATIONS,
     GET_CUSTOMER_CHARGE_CARDS,
+    is_charging_global_status,
+    normalize_global_status,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -81,8 +84,7 @@ def _is_charging_channel(channel: dict[str, Any] | None) -> bool:
     if not channel:
         return False
 
-    channel_status = str(channel.get("globalStatus", "")).lower()
-    return channel_status in ("charging", "occupied", "busy")
+    return is_charging_global_status(channel.get("globalStatus"))
 
 
 class FiftyFiveApiError(Exception):
@@ -430,10 +432,16 @@ class FiftyFiveApiClient:
         channel = await self.get_charge_station_channel()
 
         if _is_charging_channel(channel):
-            _LOGGER.debug("Channel indicates charging; fetching active transaction")
+            _LOGGER.debug(
+                "Channel status is %s; fetching active transaction",
+                GLOBAL_STATUS_CHARGING,
+            )
             active_transaction = await self.get_active_transaction()
         else:
-            _LOGGER.debug("Channel is not charging; skipping active transaction fetch")
+            _LOGGER.debug(
+                "Channel status is %s; skipping active transaction fetch",
+                normalize_global_status(channel.get("globalStatus")) if channel else None,
+            )
             active_transaction = None
 
         active_reservation = await self.get_active_reservation()
@@ -451,7 +459,7 @@ class FiftyFiveApiClient:
         }
         _LOGGER.debug("Realtime data fetch complete. Summary: overview=%s, channel_status=%s, has_transaction=%s, has_reservation=%s, cards=%d",
             bool(overview),
-            channel.get("globalStatus") if channel else None,
+            normalize_global_status(channel.get("globalStatus")) if channel else None,
             active_transaction is not None,
             active_reservation is not None,
             len(charge_cards),

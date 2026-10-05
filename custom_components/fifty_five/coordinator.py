@@ -11,7 +11,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .api import FiftyFiveApiClient, FiftyFiveApiError, FiftyFiveAuthError
-from .const import DOMAIN
+from .const import DOMAIN, is_charging_global_status, normalize_global_status
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -132,10 +132,13 @@ class FiftyFiveDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not self.data:
                 return False
             has_active = self.data.get("active_transaction") is not None
-            channel_status = self.data.get("channel", {}).get("globalStatus", "").lower()
-            is_charging = has_active or channel_status in ("charging", "occupied", "busy")
+            channel_status = normalize_global_status(
+                self.data.get("channel", {}).get("globalStatus")
+            )
+            is_charging = has_active or is_charging_global_status(channel_status)
             _LOGGER.debug(
-                "Coordinator: Rapid poll check - is_charging=%s, expected=%s",
+                "Coordinator: Rapid poll check - channel_status=%s, is_charging=%s, expected=%s",
+                channel_status,
                 is_charging,
                 expected_charging,
             )

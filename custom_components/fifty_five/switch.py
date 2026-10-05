@@ -12,7 +12,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, is_charging_global_status, normalize_global_status
 from .coordinator import FiftyFiveDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -72,8 +72,8 @@ class FiftyFiveChargingSwitch(
             return False
         # Check both active_transaction and channel status
         has_active_transaction = self.coordinator.data.get("active_transaction") is not None
-        channel_status = self.coordinator.data.get("channel", {}).get("globalStatus", "").lower()
-        is_charging = channel_status in ("charging", "occupied", "busy")
+        channel_status = self.coordinator.data.get("channel", {}).get("globalStatus")
+        is_charging = is_charging_global_status(channel_status)
         return has_active_transaction or is_charging
 
     @property
@@ -85,7 +85,9 @@ class FiftyFiveChargingSwitch(
         }
 
         if self.coordinator.data:
-            channel_status = self.coordinator.data.get("channel", {}).get("globalStatus")
+            channel_status = normalize_global_status(
+                self.coordinator.data.get("channel", {}).get("globalStatus")
+            )
             if channel_status:
                 attrs["channel_status"] = channel_status
 

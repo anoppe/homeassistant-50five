@@ -19,7 +19,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, normalize_global_status
 from .coordinator import FiftyFiveDataUpdateCoordinator
 
 
@@ -304,7 +304,9 @@ SENSOR_DESCRIPTIONS: tuple[FiftyFiveSensorEntityDescription, ...] = (
         key="channel_status",
         name="Channel Status",
         icon="mdi:ev-station",
-        value_fn=lambda data: data.get("channel", {}).get("globalStatus"),
+        value_fn=lambda data: normalize_global_status(
+            data.get("channel", {}).get("globalStatus")
+        ),
     ),
     FiftyFiveSensorEntityDescription(
         key="authorization_mode",
