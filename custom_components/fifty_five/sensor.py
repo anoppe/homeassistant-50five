@@ -116,7 +116,10 @@ def _get_active_transaction_energy(data: dict[str, Any]) -> float | int | None:
     active_transaction = _get_active_transaction_data(data)
     if not active_transaction:
         return None
-    return _coerce_number(active_transaction.get("energyDelivered"))
+    energy_wh = _coerce_number(active_transaction.get("energyDelivered"))
+    if energy_wh is None:
+        return None
+    return round(float(energy_wh) / 1000, 3)
 
 
 def _get_active_transaction_duration(data: dict[str, Any]) -> int | None:
@@ -500,4 +503,3 @@ class FiftyFiveSensor(
         if self.coordinator.data:
             return self.entity_description.value_fn(self.coordinator.data)
         return None
-
