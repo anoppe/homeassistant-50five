@@ -14,12 +14,14 @@ from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, Tex
 from .api import FiftyFiveApiClient, FiftyFiveApiError, FiftyFiveAuthError
 from .const import DOMAIN, CONF_CHARGE_STATION_ID, CONF_CHANNEL_ID, CONF_CUSTOMER_ID
 
+EMAIL_USERNAME = "Email / Username"
+
 _LOGGER = logging.getLogger(__name__)
 
 # Step 1: Only ask for credentials
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required("Email / Username"): str,
+        vol.Required(EMAIL_USERNAME): str,
         vol.Required(CONF_PASSWORD): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
     }
 )
@@ -44,7 +46,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            self._email = user_input[CONF_EMAIL]
+            self._email = user_input[EMAIL_USERNAME]
             self._password = user_input[CONF_PASSWORD]
 
             try:
