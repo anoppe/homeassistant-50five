@@ -45,6 +45,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass=hass,
         client=client,
         update_interval=SCAN_INTERVAL,
+        config_entry=entry,
     )
     coordinator.set_selected_card(entry.options.get(CONF_DEFAULT_CARD_ID))
 
@@ -63,4 +64,3 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].pop(entry.entry_id)
 
     return unload_ok
-

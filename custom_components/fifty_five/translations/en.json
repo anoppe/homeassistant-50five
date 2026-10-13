@@ -1,6 +1,18 @@
 {
   "config": {
     "step": {
+      "reauth_confirm": {
+        "title": "Reconnect to 50Five",
+        "description": "Authentication failed. Enter your current 50Five credentials to reconnect your existing charger.",
+        "data": {
+          "email": "Email / Username",
+          "password": "Password"
+        },
+        "data_description": {
+          "email": "Your 50Five account email address or username",
+          "password": "Your current 50Five account password"
+        }
+      },
       "user": {
         "title": "50Five EV Charger",
         "description": "Enter your 50Five credentials. Your charger will be discovered automatically.",
@@ -40,6 +52,7 @@
       "unknown": "An unexpected error occurred"
     },
     "abort": {
+      "reauth_successful": "Authentication successful. Your charger has been reconnected.",
       "already_configured": "This charger is already configured"
     }
   },

@@ -49,6 +49,16 @@ During setup, you'll need to provide:
 | **Email** | Your 50Five account email address |
 | **Password** | Your 50Five account password |
 
+### Authentication recovery
+
+Expired sessions are retried automatically. If authentication still fails, Home
+Assistant prompts you to reauthenticate the integration under **Settings >
+Devices & Services**. Enter your current email/username and password in the prompt.
+Credentials are saved only after successful authentication and a check that the
+existing charger is accessible. The integration then reloads, preserving your
+charger configuration and entity IDs. Temporary connection failures do not prompt
+you to replace your credentials.
+
 ## Example Dashboard Card
 
 ```yaml
@@ -128,6 +138,5 @@ This project is licensed under the MIT License.
 ## Disclaimer
 
 This integration is not officially affiliated with 50Five. Use at your own risk.
-
 
 

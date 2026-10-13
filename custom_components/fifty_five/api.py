@@ -185,6 +185,11 @@ class FiftyFiveApiClient:
                 API_URL, json=payload, headers=headers
             ) as response:
                 status_code = response.status
+                if status_code in (401, 403):
+                    self._access_token = None
+                    raise FiftyFiveAuthError(
+                        f"Authentication rejected (HTTP {status_code})"
+                    )
                 response_text = await response.text()
 
                 _LOGGER.debug(
@@ -205,9 +210,13 @@ class FiftyFiveApiClient:
                 response.raise_for_status()
 
                 if "errors" in data:
-                    error_message = data["errors"][0].get("message", "Unknown error")
+                    error = data["errors"][0]
+                    error_message = error.get("message", "Unknown error")
                     _LOGGER.debug("<<< GraphQL Error: %s", error_message)
-                    if "unauthorized" in error_message.lower() or "unauthenticated" in error_message.lower():
+                    if error.get("extensions", {}).get("code") == "UNAUTHENTICATED" or any(
+                        message in error_message.lower()
+                        for message in ("unauthorized", "unauthenticated", "invalid credentials")
+                    ):
                         # Token might be expired, try to re-authenticate
                         self._access_token = None
                         raise FiftyFiveAuthError(error_message)
@@ -488,4 +497,3 @@ class FiftyFiveApiClient:
         except FiftyFiveApiError as err:
             _LOGGER.debug("Connection test failed: %s", err)
             return False
-

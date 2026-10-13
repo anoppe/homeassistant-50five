@@ -39,6 +39,58 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._customer_id: str | None = None
         self._charge_stations: list[dict[str, Any]] = []
 
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
+        """Request replacement credentials for the existing charger."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Validate and save replacement credentials without recreating entities."""
+        entry = self._get_reauth_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            client = FiftyFiveApiClient(
+                session=async_get_clientsession(self.hass),
+                email=user_input[CONF_EMAIL],
+                password=user_input[CONF_PASSWORD],
+                charge_station_id=entry.data[CONF_CHARGE_STATION_ID],
+                channel_id=entry.data[CONF_CHANNEL_ID],
+            )
+            try:
+                await client.authenticate()
+                if not client.customer_id:
+                    errors["base"] = "no_customer_id"
+                elif not await client.get_charge_station_overview():
+                    errors["base"] = "cannot_connect"
+                else:
+                    return self.async_update_reload_and_abort(
+                        entry,
+                        data_updates={
+                            CONF_EMAIL: user_input[CONF_EMAIL],
+                            CONF_PASSWORD: user_input[CONF_PASSWORD],
+                            CONF_CUSTOMER_ID: client.customer_id,
+                        },
+                    )
+            except FiftyFiveAuthError:
+                errors["base"] = "invalid_auth"
+            except FiftyFiveApiError:
+                errors["base"] = "cannot_connect"
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_EMAIL, default=entry.data[CONF_EMAIL]): str,
+                    vol.Required(CONF_PASSWORD): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                    ),
+                }
+            ),
+            errors=errors,
+        )
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:

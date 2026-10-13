@@ -6,7 +6,9 @@ import logging
 from datetime import timedelta, datetime
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -31,11 +33,14 @@ class FiftyFiveDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hass: HomeAssistant,
         client: FiftyFiveApiClient,
         update_interval: timedelta,
+        *,
+        config_entry: ConfigEntry | None = None,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=config_entry,
             name=DOMAIN,
             update_interval=update_interval,
         )
@@ -86,6 +91,8 @@ class FiftyFiveDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._cached_history = await self.client.get_charging_history()
                     self._last_history_update = now
                     _LOGGER.debug("Coordinator: Charging history updated, %d transactions", len(self._cached_history))
+                except FiftyFiveAuthError:
+                    raise
                 except FiftyFiveApiError as err:
                     _LOGGER.warning("Coordinator: Failed to fetch charging history: %s", err)
                     # Keep using cached history on error
@@ -111,9 +118,13 @@ class FiftyFiveDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 data["charging_history"] = self._cached_history
                 _LOGGER.debug("Coordinator: Data update successful after re-auth")
                 return data
+            except FiftyFiveAuthError as auth_err:
+                raise ConfigEntryAuthFailed(
+                    "Authentication failed; please reauthenticate with 50Five"
+                ) from auth_err
             except FiftyFiveApiError as auth_err:
                 _LOGGER.debug("Coordinator: Re-authentication failed: %s", auth_err)
-                raise UpdateFailed(f"Authentication failed: {auth_err}") from auth_err
+                raise UpdateFailed(f"Error reconnecting to 50Five: {auth_err}") from auth_err
         except FiftyFiveApiError as err:
             _LOGGER.debug("Coordinator: Data update failed: %s", err)
             raise UpdateFailed(f"Error fetching data: {err}") from err
@@ -239,4 +250,3 @@ class FiftyFiveDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.async_update_listeners()
         
         return result
-
