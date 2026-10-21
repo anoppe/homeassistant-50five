@@ -13,7 +13,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .api import FiftyFiveApiClient, FiftyFiveApiError, FiftyFiveAuthError
-from .const import DOMAIN, is_charging_global_status, normalize_global_status
+from .const import DOMAIN, is_charging_global_status, mask_card_number, normalize_global_status
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -69,7 +69,10 @@ class FiftyFiveDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def set_selected_card(self, card_id: str | None) -> None:
         """Set the default charge card ID."""
         self._selected_card_id = card_id
-        _LOGGER.info("Default charge card set to: %s", card_id or "(none)")
+        _LOGGER.info(
+            "Default charge card set to: %s",
+            mask_card_number(card_id) if card_id else "(none)",
+        )
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from API."""
@@ -199,7 +202,10 @@ class FiftyFiveDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Start a charging transaction."""
         # Use provided card, or fall back to selected default card
         card_to_use = card if card else (self._selected_card_id or "")
-        _LOGGER.debug("Coordinator: Start transaction requested (card: %s)", card_to_use or "(none)")
+        _LOGGER.debug(
+            "Coordinator: Start transaction requested (card: %s)",
+            mask_card_number(card_to_use) if card_to_use else "(none)",
+        )
         
         # Cancel any existing rapid poll task
         if self._rapid_poll_task and not self._rapid_poll_task.done():

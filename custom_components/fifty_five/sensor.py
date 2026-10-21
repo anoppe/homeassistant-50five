@@ -15,6 +15,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfEnergy, UnitOfTime
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -273,21 +274,6 @@ def _get_charge_card_count(data: dict[str, Any]) -> int:
     return len(cards)
 
 
-def _get_charge_cards_summary(data: dict[str, Any]) -> str | None:
-    """Get a summary of all charge cards."""
-    cards = data.get("charge_cards", [])
-    if not cards:
-        return "No cards configured"
-    summaries = []
-    for card in cards:
-        external_id = card.get("externalId", "Unknown")
-        state = card.get("state", "unknown")
-        card_type = card.get("type", "unknown")
-        provider = card.get("cardProvider", {}).get("name", "Unknown")
-        summaries.append(f"{external_id} ({provider}, {card_type}, {state})")
-    return "; ".join(summaries)
-
-
 @dataclass(frozen=True)
 class FiftyFiveSensorEntityDescriptionMixin:
     """Mixin for required keys."""
@@ -449,13 +435,10 @@ SENSOR_DESCRIPTIONS: tuple[FiftyFiveSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=_get_charge_card_count,
     ),
-    FiftyFiveSensorEntityDescription(
-        key="charge_cards_summary",
-        name="Charge Cards Details",
-        icon="mdi:credit-card",
-        value_fn=_get_charge_cards_summary,
-    ),
 )
+
+# Removed because its state exposed charge card numbers.
+REMOVED_SENSOR_KEYS = ("charge_cards_summary",)
 
 
 async def async_setup_entry(
@@ -465,6 +448,13 @@ async def async_setup_entry(
 ) -> None:
     """Set up 50Five sensors based on a config entry."""
     coordinator: FiftyFiveDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+
+    entity_registry = er.async_get(hass)
+    for key in REMOVED_SENSOR_KEYS:
+        if entity_id := entity_registry.async_get_entity_id(
+            "sensor", DOMAIN, f"{entry.entry_id}_{key}"
+        ):
+            entity_registry.async_remove(entity_id)
 
     async_add_entities(
         FiftyFiveSensor(coordinator, description, entry)

@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, CONF_DEFAULT_CARD_ID
+from .const import DOMAIN, CONF_DEFAULT_CARD_ID, mask_card_number
 from .coordinator import FiftyFiveDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -55,50 +55,39 @@ class FiftyFiveChargeCardSelect(CoordinatorEntity, SelectEntity):
             "model": "EV Charger",
         }
 
+    def _card_options(self) -> dict[str, dict[str, Any]]:
+        """Map display labels to cards; labels never contain the full card number."""
+        cards = self.coordinator.data.get("charge_cards", []) or []
+        options: dict[str, dict[str, Any]] = {}
+        for index, card in enumerate(cards, start=1):
+            provider = (card.get("cardProvider") or {}).get("name") or "Unknown"
+            label = f"Card {index} ({provider}, {mask_card_number(card.get('externalId'))})"
+            options[label] = card
+        return options
+
+    def _selected_card(self) -> tuple[str, dict[str, Any]] | None:
+        """Return the label and card matching the coordinator's selected card."""
+        selected_card_id = self.coordinator.selected_card_id
+        if not selected_card_id:
+            return None
+        # Match externalId, with a fallback for legacy selections stored by internal id.
+        for label, card in self._card_options().items():
+            if selected_card_id in (card.get("externalId"), card.get("id")):
+                return label, card
+        return None
+
     @property
     def options(self) -> list[str]:
         """Return available charge card options."""
-        cards = self.coordinator.data.get("charge_cards", [])
-        
-        options = [NONE_OPTION]
-        
-        for card in cards:
-            external_id = card.get("externalId", "Unknown")
-            provider = card.get("cardProvider", {}).get("name", "Unknown")
-
-            # Format: "Card 1234567890 (50Five)"
-            option = f"Card {external_id} ({provider})"
-            options.append(option)
-            
+        options = [NONE_OPTION, *self._card_options()]
         _LOGGER.debug("Available card options: %s", options)
         return options
 
     @property
     def current_option(self) -> str:
         """Return the currently selected option."""
-        selected_card_id = self.coordinator.selected_card_id
-        
-        if not selected_card_id:
-            return NONE_OPTION
-        
-        cards = self.coordinator.data.get("charge_cards", [])
-        # Prefer externalId for current behavior, but keep legacy fallback for stored internal id.
-        selected_card = next(
-            (
-                c
-                for c in cards
-                if c.get("externalId") == selected_card_id or c.get("id") == selected_card_id
-            ),
-            None,
-        )
-        
-        if selected_card:
-            external_id = selected_card.get("externalId", "Unknown")
-            provider = selected_card.get("cardProvider", {}).get("name", "Unknown")
-            return f"Card {external_id} ({provider})"
-        
-        # If selected card not found in current cards, reset to None
-        return NONE_OPTION
+        selected = self._selected_card()
+        return selected[0] if selected else NONE_OPTION
 
     async def async_select_option(self, option: str) -> None:
         """Handle option selection."""
@@ -107,24 +96,12 @@ class FiftyFiveChargeCardSelect(CoordinatorEntity, SelectEntity):
         if option == NONE_OPTION:
             _LOGGER.info("Default charge card cleared")
         else:
-            # Parse the option to extract card ID
-            # Option format: "Card 1234567890 (50Five)"
-            cards = self.coordinator.data.get("charge_cards", [])
-            
-            # Extract externalId from option string
-            for card in cards:
-                external_id = card.get("externalId", "")
-                provider = card.get("cardProvider", {}).get("name", "")
-                expected_option = f"Card {external_id} ({provider})"
-                
-                if expected_option == option:
-                    selected_card_id = card.get("externalId")
-                    _LOGGER.info("Default charge card set to: %s (external ID: %s)", option, selected_card_id)
-                    break
-
-            if selected_card_id is None:
+            card = self._card_options().get(option)
+            if card is None or not card.get("externalId"):
                 _LOGGER.warning("Selected charge card option not found in current card list: %s", option)
                 return
+            selected_card_id = card["externalId"]
+            _LOGGER.info("Default charge card set to: %s", option)
 
         updated_options = dict(self._entry.options)
         if selected_card_id is None:
@@ -139,30 +116,16 @@ class FiftyFiveChargeCardSelect(CoordinatorEntity, SelectEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return additional state attributes."""
-        selected_card_id = self.coordinator.selected_card_id
-        
-        if not selected_card_id:
+        """Return additional state attributes (without the card number)."""
+        selected = self._selected_card()
+        if not selected:
             return {}
-        
-        cards = self.coordinator.data.get("charge_cards", [])
-        selected_card = next(
-            (
-                c
-                for c in cards
-                if c.get("externalId") == selected_card_id or c.get("id") == selected_card_id
-            ),
-            None,
-        )
-        
-        if selected_card:
-            return {
-                "card_id": selected_card.get("id"),
-                "external_id": selected_card.get("externalId"),
-                "provider": selected_card.get("cardProvider", {}).get("name"),
-                "type": selected_card.get("type"),
-                "state": selected_card.get("state"),
-                "roaming": selected_card.get("roaming"),
-            }
-        
-        return {}
+
+        card = selected[1]
+        return {
+            "card_number": mask_card_number(card.get("externalId")),
+            "provider": (card.get("cardProvider") or {}).get("name"),
+            "type": card.get("type"),
+            "state": card.get("state"),
+            "roaming": card.get("roaming"),
+        }

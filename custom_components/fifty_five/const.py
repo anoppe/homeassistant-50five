@@ -46,6 +46,15 @@ def is_charging_global_status(status: Any) -> bool:
     """Return True when a documented channel status means active charging."""
     return normalize_global_status(status) == GLOBAL_STATUS_CHARGING
 
+
+def mask_card_number(card_number: Any) -> str:
+    """Mask a charge card number, revealing at most its last four characters."""
+    number = str(card_number or "")
+    if len(number) < 8:
+        return "••••"
+    return f"••••{number[-4:]}"
+
+
 # Configuration
 CONF_CHARGE_STATION_ID = "charge_station_id"
 CONF_CHANNEL_ID = "channel_id"

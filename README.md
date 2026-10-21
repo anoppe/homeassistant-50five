@@ -59,6 +59,16 @@ existing charger is accessible. The integration then reloads, preserving your
 charger configuration and entity IDs. Temporary connection failures do not prompt
 you to replace your credentials.
 
+### Charge card privacy
+
+Charge card numbers authorize charging, so they are never exposed in entity
+states, attributes or logs. The **Charge Card** select labels cards as
+`Card <n> (<provider>, ••••<last 4>)`, and the full number is only used internally
+to start a transaction. The former *Charge Cards Details* sensor has been removed
+(the *Charge Cards* count sensor remains); its registry entry is cleaned up
+automatically. Historical states recorded before this change remain in the
+recorder until purged, e.g. via the `recorder.purge_entities` action.
+
 ## Example Dashboard Card
 
 ```yaml

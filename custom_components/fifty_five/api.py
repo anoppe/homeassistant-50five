@@ -23,6 +23,7 @@ from .const import (
     GET_CUSTOMER_WITH_CHARGE_STATIONS,
     GET_CUSTOMER_CHARGE_CARDS,
     is_charging_global_status,
+    mask_card_number,
     normalize_global_status,
 )
 
@@ -36,6 +37,8 @@ def _sanitize_payload_for_logging(payload: dict[str, Any]) -> dict[str, Any]:
         variables = sanitized["variables"].copy()
         if "password" in variables:
             variables["password"] = "***REDACTED***"
+        if variables.get("card"):
+            variables["card"] = mask_card_number(variables["card"])
         if "email" in variables:
             # Partially mask email
             email = variables["email"]
@@ -46,9 +49,21 @@ def _sanitize_payload_for_logging(payload: dict[str, Any]) -> dict[str, Any]:
     return sanitized
 
 
+def _mask_external_ids(value: Any) -> Any:
+    """Return a copy of value with every charge card externalId masked."""
+    if isinstance(value, dict):
+        return {
+            key: mask_card_number(item) if key == "externalId" else _mask_external_ids(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_mask_external_ids(item) for item in value]
+    return value
+
+
 def _sanitize_response_for_logging(data: dict[str, Any]) -> dict[str, Any]:
     """Sanitize response for logging by masking sensitive data."""
-    sanitized = data.copy()
+    sanitized = _mask_external_ids(data)
     if "data" in sanitized and "login" in sanitized.get("data", {}):
         login_data = sanitized["data"]["login"].copy() if sanitized["data"]["login"] else {}
         if "access_token" in login_data:
@@ -56,6 +71,15 @@ def _sanitize_response_for_logging(data: dict[str, Any]) -> dict[str, Any]:
             login_data["access_token"] = f"{token[:10]}...***REDACTED***" if token else None
         sanitized["data"] = {"login": login_data}
     return sanitized
+
+
+def _redact_secrets(text: str, variables: dict[str, Any]) -> str:
+    """Remove submitted card numbers and passwords that a server may echo back."""
+    if card := variables.get("card"):
+        text = text.replace(str(card), mask_card_number(card))
+    if password := variables.get("password"):
+        text = text.replace(str(password), "***REDACTED***")
+    return text
 
 
 def _decode_jwt_payload(token: str) -> dict[str, Any]:
@@ -201,17 +225,25 @@ class FiftyFiveApiClient:
                 try:
                     data = json.loads(response_text)
                     sanitized_response = _sanitize_response_for_logging(data)
-                    _LOGGER.debug("<<< Body: %s", json.dumps(sanitized_response, indent=2))
+                    _LOGGER.debug(
+                        "<<< Body: %s",
+                        _redact_secrets(
+                            json.dumps(sanitized_response, indent=2), payload["variables"]
+                        ),
+                    )
                 except json.JSONDecodeError:
-                    _LOGGER.debug("<<< Body (raw): %s", response_text[:500])
+                    safe_text = _redact_secrets(response_text, payload["variables"])
+                    _LOGGER.debug("<<< Body (raw): %s", safe_text[:500])
                     response.raise_for_status()
-                    raise FiftyFiveApiError(f"Invalid JSON response: {response_text[:100]}")
+                    raise FiftyFiveApiError(f"Invalid JSON response: {safe_text[:100]}")
 
                 response.raise_for_status()
 
                 if "errors" in data:
                     error = data["errors"][0]
-                    error_message = error.get("message", "Unknown error")
+                    error_message = _redact_secrets(
+                        str(error.get("message", "Unknown error")), payload["variables"]
+                    )
                     _LOGGER.debug("<<< GraphQL Error: %s", error_message)
                     if error.get("extensions", {}).get("code") == "UNAUTHENTICATED" or any(
                         message in error_message.lower()
@@ -392,7 +424,7 @@ class FiftyFiveApiClient:
             "Starting transaction on station: %s, channel: %s, card: %s",
             self._charge_station_id,
             self._channel_id,
-            card or "(none)",
+            mask_card_number(card) if card else "(none)",
         )
         try:
             data = await self._execute_query(

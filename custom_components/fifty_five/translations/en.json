@@ -120,9 +120,6 @@
       },
       "charge_card_count": {
         "name": "Charge Cards"
-      },
-      "charge_cards_summary": {
-        "name": "Charge Cards Details"
       }
     },
     "select": {
