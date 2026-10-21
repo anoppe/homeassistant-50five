@@ -8,6 +8,10 @@
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=anoppe&repository=homeassistant-50five&category=Integration)
 
+## Project status
+
+This project is an independent Home Assistant custom integration and is not affiliated with, sponsored by, or endorsed by 50Five or its parent company.
+
 This custom integration allows you to monitor and control your 50Five EV charger from Home Assistant.
 
 ## Features
@@ -148,5 +152,3 @@ This project is licensed under the MIT License.
 ## Disclaimer
 
 This integration is not officially affiliated with 50Five. Use at your own risk.
-
-
