@@ -368,17 +368,6 @@ class FiftyFiveApiClient:
         _LOGGER.debug("Active transaction result: %s", result)
         return result
 
-    # async def get_active_reservation(self) -> dict[str, Any] | None:
-    #     """Get the active reservation."""
-    #     _LOGGER.debug("Fetching active reservation")
-    #     data = await self._execute_query(
-    #         query=ACTIVE_RESERVATION,
-    #         operation_name="ActiveReservation",
-    #     )
-    #     result = data.get("activeReservation")
-    #     _LOGGER.debug("Active reservation result: %s", result)
-    #     return result
-
     async def get_charging_history(self, days: int = 30, items_per_page: int = 30) -> list[dict[str, Any]]:
         """Get charging history for the charge station."""
         from datetime import datetime, timedelta, timezone

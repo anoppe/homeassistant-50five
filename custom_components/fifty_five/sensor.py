@@ -362,12 +362,6 @@ SENSOR_DESCRIPTIONS: tuple[FiftyFiveSensorEntityDescription, ...] = (
         icon="mdi:map-marker",
         value_fn=_get_active_transaction_address,
     ),
-    FiftyFiveSensorEntityDescription(
-        key="reservation_status",
-        name="Reservation Status",
-        icon="mdi:calendar-clock",
-        value_fn=lambda data: data.get("active_reservation", {}).get("status") if data.get("active_reservation") else "None",
-    ),
     # Charging History Sensors
     FiftyFiveSensorEntityDescription(
         key="history_transaction_count",
