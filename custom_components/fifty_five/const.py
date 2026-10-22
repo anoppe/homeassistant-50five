@@ -70,8 +70,8 @@ APPLICATION_ID = "27ce6f0c-d987-4d6f-b0a3-aea459a90c1f"
 
 # GraphQL Queries
 LOGIN_MUTATION = """
-mutation Login($email: String!, $password: String!) {
-    login(email: $email, password: $password) {
+mutation LoginFiftyFive($email: String!, $password: String!) {
+    loginFiftyFive(email: $email, password: $password) {
         access_token
         expires_in
         token_type
@@ -268,35 +268,6 @@ mutation StartTransaction($chargeStationId: ID!, $channelId: ID!, $card: String)
 STOP_TRANSACTION_MUTATION = """
 mutation StopTransaction($chargeStationId: ID!, $channelId: ID!) {
     stopTransaction(chargeStationId: $chargeStationId, channelId: $channelId)
-}
-"""
-
-ACTIVE_RESERVATION = """
-query ActiveReservation {
-    activeReservation {
-        ...Reservation
-        __typename
-    }
-}
-
-fragment Reservation on Reservation {
-    status
-    start
-    expiry
-    appId
-    id
-    visualNumber
-    type
-    evseId
-    location {
-        evses {
-            customEvseId
-            uid
-            __typename
-        }
-        __typename
-    }
-    __typename
 }
 """
 

@@ -18,7 +18,6 @@ from .const import (
     LMS_ACTIVE_TRANSACTION,
     START_TRANSACTION_MUTATION,
     STOP_TRANSACTION_MUTATION,
-    ACTIVE_RESERVATION,
     GET_CHARGING_HISTORY,
     GET_CUSTOMER_WITH_CHARGE_STATIONS,
     GET_CUSTOMER_CHARGE_CARDS,
@@ -255,7 +254,7 @@ class FiftyFiveApiClient:
                     raise FiftyFiveApiError(error_message)
 
                 return data.get("data", {})
-        except aiohttp.ClientError as err:
+        except aiohttp.ClientResponseError as err:
             _LOGGER.debug("<<< REQUEST FAILED [%s]: %s", operation_name or "unnamed", err)
             raise FiftyFiveApiError(f"Request failed: {err}") from err
 
@@ -266,11 +265,11 @@ class FiftyFiveApiClient:
             data = await self._execute_query(
                 query=LOGIN_MUTATION,
                 variables={"email": self._email, "password": self._password},
-                operation_name="Login",
+                operation_name="LoginFiftyFive",
                 authenticated=False,
             )
 
-            login_data = data.get("login")
+            login_data = data.get("loginFiftyFive")
             if login_data and login_data.get("access_token"):
                 self._access_token = login_data["access_token"]
                 expires_in = login_data.get("expires_in", "unknown")
@@ -369,16 +368,16 @@ class FiftyFiveApiClient:
         _LOGGER.debug("Active transaction result: %s", result)
         return result
 
-    async def get_active_reservation(self) -> dict[str, Any] | None:
-        """Get the active reservation."""
-        _LOGGER.debug("Fetching active reservation")
-        data = await self._execute_query(
-            query=ACTIVE_RESERVATION,
-            operation_name="ActiveReservation",
-        )
-        result = data.get("activeReservation")
-        _LOGGER.debug("Active reservation result: %s", result)
-        return result
+    # async def get_active_reservation(self) -> dict[str, Any] | None:
+    #     """Get the active reservation."""
+    #     _LOGGER.debug("Fetching active reservation")
+    #     data = await self._execute_query(
+    #         query=ACTIVE_RESERVATION,
+    #         operation_name="ActiveReservation",
+    #     )
+    #     result = data.get("activeReservation")
+    #     _LOGGER.debug("Active reservation result: %s", result)
+    #     return result
 
     async def get_charging_history(self, days: int = 30, items_per_page: int = 30) -> list[dict[str, Any]]:
         """Get charging history for the charge station."""
@@ -485,24 +484,21 @@ class FiftyFiveApiClient:
             )
             active_transaction = None
 
-        active_reservation = await self.get_active_reservation()
         charge_cards = await self.get_charge_cards()
 
         result = {
             "overview": overview,
             "channel": channel,
             "active_transaction": active_transaction,
-            "active_reservation": active_reservation,
             "charge_station_id": self._charge_station_id,
             "channel_id": self._channel_id,
             "customer_id": self._customer_id,
             "charge_cards": charge_cards,
         }
-        _LOGGER.debug("Realtime data fetch complete. Summary: overview=%s, channel_status=%s, has_transaction=%s, has_reservation=%s, cards=%d",
+        _LOGGER.debug("Realtime data fetch complete. Summary: overview=%s, channel_status=%s, has_transaction=%s, cards=%d",
             bool(overview),
             normalize_global_status(channel.get("globalStatus")) if channel else None,
             active_transaction is not None,
-            active_reservation is not None,
             len(charge_cards),
         )
         return result
