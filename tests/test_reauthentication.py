@@ -100,6 +100,16 @@ class ApiAuthenticationTest(unittest.IsolatedAsyncioTestCase):
             await client._execute_query("query")
         self.assertNotIsInstance(raised.exception, FiftyFiveAuthError)
 
+    async def test_timeout_is_not_authentication_failure(self) -> None:
+        session = MagicMock()
+        session.post.return_value.__aenter__.side_effect = TimeoutError()
+        client = FiftyFiveApiClient(session, "old@example.com", "old-password")
+        client._access_token = "valid"
+        with self.assertRaises(FiftyFiveApiError) as raised:
+            await client._execute_query("query")
+        self.assertNotIsInstance(raised.exception, FiftyFiveAuthError)
+        self.assertEqual(client._access_token, "valid")
+
 
 class HomeAssistantTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:

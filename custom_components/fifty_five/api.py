@@ -259,9 +259,11 @@ class FiftyFiveApiClient:
                     raise FiftyFiveApiError(error_message)
 
                 return data.get("data", {})
-        except aiohttp.ClientResponseError as err:
+        except (aiohttp.ClientError, TimeoutError) as err:
+            # Network problems (connection refused, DNS, timeouts) and HTTP errors are
+            # API failures, never authentication failures.
             _LOGGER.debug("<<< REQUEST FAILED [%s]: %s", operation_name or "unnamed", err)
-            raise FiftyFiveApiError(f"Request failed: {err}") from err
+            raise FiftyFiveApiError(f"Request failed: {err or type(err).__name__}") from err
 
     async def authenticate(self) -> bool:
         """Authenticate with the API and extract customer ID from JWT."""
