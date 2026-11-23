@@ -14,13 +14,13 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfEnergy, UnitOfTime
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, normalize_global_status
+from .const import DOMAIN, charge_card_label, mask_card_number, normalize_global_status
 from .coordinator import FiftyFiveDataUpdateCoordinator
 
 
@@ -268,6 +268,55 @@ def _get_history_currency(data: dict[str, Any]) -> str | None:
     return None
 
 
+def _get_transaction_card_number(transaction: dict[str, Any]) -> str | None:
+    """Return the card number that authorized a history transaction (internal use only)."""
+    snapshot = transaction.get("cardSnapshot") or {}
+    return snapshot.get("externalId") or None
+
+
+def _find_charge_card(
+    data: dict[str, Any], card_number: str
+) -> tuple[int, dict[str, Any]] | None:
+    """Return the (1-based index, card) for a card number from the account's cards."""
+    for index, card in enumerate(data.get("charge_cards", []) or [], start=1):
+        if card.get("externalId") == card_number:
+            return index, card
+    return None
+
+
+def _describe_card_number(data: dict[str, Any], card_number: str | None) -> str | None:
+    """Return a masked, human-readable label for the card that authorized a session."""
+    if not card_number:
+        return None
+    match = _find_charge_card(data, card_number)
+    if match:
+        index, card = match
+        return charge_card_label(card, index, data.get("card_labels"))
+    # Card not on this account (e.g. a guest or district card of another customer).
+    return f"Other card ({mask_card_number(card_number)})"
+
+
+def _get_last_transaction_card(data: dict[str, Any]) -> str | None:
+    """Get the masked label of the card that authorized the last transaction."""
+    last = _get_latest_transaction(data)
+    if not last:
+        return None
+    return _describe_card_number(data, _get_transaction_card_number(last))
+
+
+def _get_card_history_transactions(
+    data: dict[str, Any], card_number: str | None
+) -> list[dict[str, Any]]:
+    """Return the 30-day history transactions authorized by the given card."""
+    if not card_number:
+        return []
+    return [
+        item
+        for item in data.get("charging_history", []) or []
+        if _get_transaction_card_number(item) == card_number
+    ]
+
+
 def _get_charge_card_count(data: dict[str, Any]) -> int:
     """Get the number of charge cards."""
     cards = data.get("charge_cards", [])
@@ -416,6 +465,12 @@ SENSOR_DESCRIPTIONS: tuple[FiftyFiveSensorEntityDescription, ...] = (
         value_fn=_get_last_transaction_duration,
     ),
     FiftyFiveSensorEntityDescription(
+        key="last_transaction_card",
+        name="Last Transaction Card",
+        icon="mdi:credit-card-check",
+        value_fn=_get_last_transaction_card,
+    ),
+    FiftyFiveSensorEntityDescription(
         key="last_transaction_cost",
         name="Last Transaction Cost",
         icon="mdi:cash",
@@ -455,6 +510,44 @@ async def async_setup_entry(
         for description in SENSOR_DESCRIPTIONS
     )
 
+    # One energy sensor per charge card, so usage can be split per card (e.g. per car).
+    known_card_keys: set[str] = set()
+
+    @callback
+    def _add_new_card_sensors() -> None:
+        new_entities = []
+        for index, card in enumerate(
+            (coordinator.data or {}).get("charge_cards", []) or [], start=1
+        ):
+            card_key = _card_key(card)
+            if not card_key or card_key in known_card_keys:
+                continue
+            known_card_keys.add(card_key)
+            new_entities.append(
+                FiftyFiveChargeCardEnergySensor(coordinator, entry, card, index)
+            )
+        if new_entities:
+            async_add_entities(new_entities)
+
+    _add_new_card_sensors()
+    entry.async_on_unload(coordinator.async_add_listener(_add_new_card_sensors))
+
+
+def _card_key(card: dict[str, Any]) -> str | None:
+    """Return a stable identifier for a card that is not the (secret) card number."""
+    card_id = card.get("id")
+    return str(card_id) if card_id else None
+
+
+def _device_info(coordinator: FiftyFiveDataUpdateCoordinator, entry: ConfigEntry) -> DeviceInfo:
+    """Return the shared device info for all 50Five sensors."""
+    return DeviceInfo(
+        identifiers={(DOMAIN, entry.entry_id)},
+        name=f"50Five Charger {coordinator.data.get('charge_station_id', '')}",
+        manufacturer="50Five",
+        model="EV Charger",
+    )
+
 
 class FiftyFiveSensor(
     CoordinatorEntity[FiftyFiveDataUpdateCoordinator], SensorEntity
@@ -474,12 +567,7 @@ class FiftyFiveSensor(
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=f"50Five Charger {coordinator.data.get('charge_station_id', '')}",
-            manufacturer="50Five",
-            model="EV Charger",
-        )
+        self._attr_device_info = _device_info(coordinator, entry)
 
     @property
     def native_value(self) -> Any:
@@ -487,3 +575,90 @@ class FiftyFiveSensor(
         if self.coordinator.data:
             return self.entity_description.value_fn(self.coordinator.data)
         return None
+
+
+class FiftyFiveChargeCardEnergySensor(
+    CoordinatorEntity[FiftyFiveDataUpdateCoordinator], SensorEntity
+):
+    """Energy charged with a single charge card over the last 30 days."""
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:credit-card-outline"
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL
+
+    def __init__(
+        self,
+        coordinator: FiftyFiveDataUpdateCoordinator,
+        entry: ConfigEntry,
+        card: dict[str, Any],
+        index: int,
+    ) -> None:
+        """Initialize the per-card energy sensor."""
+        super().__init__(coordinator)
+        self._card_key = _card_key(card)
+        # Unique ID uses the internal card id, never the card number.
+        self._attr_unique_id = f"{entry.entry_id}_card_{self._card_key}_energy_30d"
+        self._index = index
+        self._attr_device_info = _device_info(coordinator, entry)
+
+    @property
+    def name(self) -> str:
+        """Return the name, following the card's user-chosen label."""
+        card = self._card()
+        if card is None:
+            return f"Card {self._index} Energy (30 days)"
+        cards = (self.coordinator.data or {}).get("charge_cards", []) or []
+        index = next(
+            (i for i, c in enumerate(cards, start=1) if _card_key(c) == self._card_key),
+            self._index,
+        )
+        labels = (self.coordinator.data or {}).get("card_labels")
+        return f"{charge_card_label(card, index, labels)} Energy (30 days)"
+
+    def _card(self) -> dict[str, Any] | None:
+        for card in (self.coordinator.data or {}).get("charge_cards", []) or []:
+            if _card_key(card) == self._card_key:
+                return card
+        return None
+
+    def _transactions(self) -> list[dict[str, Any]]:
+        card = self._card()
+        if not card or not self.coordinator.data:
+            return []
+        return _get_card_history_transactions(self.coordinator.data, card.get("externalId"))
+
+    @property
+    def available(self) -> bool:
+        """Return False when the card is no longer on the account."""
+        return super().available and self._card() is not None
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the total energy charged with this card in the last 30 days."""
+        if self._card() is None:
+            return None
+        total = 0.0
+        for item in self._transactions():
+            energy = _coerce_number(item.get("totalEnergy"))
+            if energy is not None:
+                total += float(energy)
+        return round(total, 2)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return per-card session statistics (without the card number)."""
+        card = self._card()
+        if card is None:
+            return {}
+        transactions = self._transactions()
+        last = transactions[0] if transactions else None
+        return {
+            "card_number": mask_card_number(card.get("externalId")),
+            "label": ((self.coordinator.data or {}).get("card_labels") or {}).get(self._card_key),
+            "provider": (card.get("cardProvider") or {}).get("name"),
+            "transactions": len(transactions),
+            "last_transaction_date": last.get("startDate") if last else None,
+            "last_transaction_energy": _coerce_number(last.get("totalEnergy")) if last else None,
+        }

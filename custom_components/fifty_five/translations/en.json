@@ -115,6 +115,9 @@
       "last_transaction_duration": {
         "name": "Last Transaction Duration"
       },
+      "last_transaction_card": {
+        "name": "Last Transaction Card"
+      },
       "last_transaction_cost": {
         "name": "Last Transaction Cost"
       },
@@ -159,6 +162,20 @@
           }
         }
       }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Charge card names",
+        "description": "Give each charge card a name, for example the car it belongs to. The name is shown in the charge card selector and the per-card sensors. Leave a field empty to use the default name (max. {max_length} characters)."
+      }
+    },
+    "error": {
+      "label_too_long": "Card names can be at most 40 characters long."
+    },
+    "abort": {
+      "no_charge_cards": "No charge cards were found on this 50Five account. Make sure the integration is loaded and try again."
     }
   }
 }
