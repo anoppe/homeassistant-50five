@@ -22,6 +22,7 @@ This custom integration allows you to monitor and control your 50Five EV charger
 - **Active Transaction Monitoring**: Track energy delivered, duration, and cost during charging
 - **Reservation Status**: View active reservations
 - **Start Transaction**: Button to initiate a charging session
+- **Charge cards per car**: Name your charge cards, see which card started the last session and how much energy each card used. See the [charge card guide](docs/charge-cards.md).
 
 ## Installation
 

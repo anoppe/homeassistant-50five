@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, CONF_DEFAULT_CARD_ID, mask_card_number
+from .const import DOMAIN, CONF_DEFAULT_CARD_ID, charge_card_label, mask_card_number
 from .coordinator import FiftyFiveDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -59,9 +59,11 @@ class FiftyFiveChargeCardSelect(CoordinatorEntity, SelectEntity):
         """Map display labels to cards; labels never contain the full card number."""
         cards = self.coordinator.data.get("charge_cards", []) or []
         options: dict[str, dict[str, Any]] = {}
+        labels = self.coordinator.data.get("card_labels") or {}
         for index, card in enumerate(cards, start=1):
-            provider = (card.get("cardProvider") or {}).get("name") or "Unknown"
-            label = f"Card {index} ({provider}, {mask_card_number(card.get('externalId'))})"
+            label = charge_card_label(card, index, labels)
+            if label in options:  # Two cards given the same name: keep options unique.
+                label = f"{label} #{index}"
             options[label] = card
         return options
 
@@ -124,6 +126,7 @@ class FiftyFiveChargeCardSelect(CoordinatorEntity, SelectEntity):
         card = selected[1]
         return {
             "card_number": mask_card_number(card.get("externalId")),
+            "label": (self.coordinator.data.get("card_labels") or {}).get(str(card.get("id"))),
             "provider": (card.get("cardProvider") or {}).get("name"),
             "type": card.get("type"),
             "state": card.get("state"),

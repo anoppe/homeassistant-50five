@@ -13,7 +13,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .api import FiftyFiveApiClient, FiftyFiveApiError, FiftyFiveAuthError
-from .const import DOMAIN, is_charging_global_status, mask_card_number, normalize_global_status
+from .const import CONF_CARD_LABELS, DOMAIN, is_charging_global_status, mask_card_number, normalize_global_status
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,6 +66,19 @@ class FiftyFiveDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Return the currently selected charge card ID."""
         return self._selected_card_id
 
+    @property
+    def card_labels(self) -> dict[str, str]:
+        """Return user-chosen card names keyed by internal card id."""
+        if self.config_entry is None:
+            return {}
+        return dict(self.config_entry.options.get(CONF_CARD_LABELS) or {})
+
+    def async_card_labels_updated(self) -> None:
+        """Push changed card names to entities without waiting for the next poll."""
+        if self.data is not None:
+            self.data["card_labels"] = self.card_labels
+            self.async_update_listeners()
+
     def set_selected_card(self, card_id: str | None) -> None:
         """Set the default charge card ID."""
         self._selected_card_id = card_id
@@ -109,6 +122,7 @@ class FiftyFiveDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Add cached history to the data
             data["charging_history"] = self._cached_history
+            data["card_labels"] = self.card_labels
 
             _LOGGER.debug("Coordinator: Data update successful")
             return data
@@ -119,6 +133,7 @@ class FiftyFiveDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 await self.client.authenticate()
                 data = await self.client.get_realtime_data()
                 data["charging_history"] = self._cached_history
+                data["card_labels"] = self.card_labels
                 _LOGGER.debug("Coordinator: Data update successful after re-auth")
                 return data
             except FiftyFiveAuthError as auth_err:

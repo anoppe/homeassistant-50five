@@ -55,11 +55,27 @@ def mask_card_number(card_number: Any) -> str:
     return f"••••{number[-4:]}"
 
 
+def charge_card_label(
+    card: dict[str, Any], index: int, labels: dict[str, str] | None = None
+) -> str:
+    """Return the display label for a charge card; never contains the full number.
+
+    ``labels`` maps the card's internal ``id`` to a user-chosen name (e.g. the car).
+    """
+    provider = (card.get("cardProvider") or {}).get("name") or "Unknown"
+    masked = mask_card_number(card.get("externalId"))
+    name = (labels or {}).get(str(card.get("id") or "")) or f"Card {index}"
+    return f"{name} ({provider}, {masked})"
+
+
 # Configuration
 CONF_CHARGE_STATION_ID = "charge_station_id"
 CONF_CHANNEL_ID = "channel_id"
 CONF_CUSTOMER_ID = "customer_id"
 CONF_DEFAULT_CARD_ID = "default_card_id"
+# User-chosen card names, keyed by the card's internal id (never the card number).
+CONF_CARD_LABELS = "card_labels"
+CARD_LABEL_MAX_LENGTH = 40
 
 # API
 # Test environment url:

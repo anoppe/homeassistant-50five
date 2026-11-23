@@ -12,7 +12,17 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, TextSelectorType
 
 from .api import FiftyFiveApiClient, FiftyFiveApiError, FiftyFiveAuthError
-from .const import DOMAIN, CONF_CHARGE_STATION_ID, CONF_CHANNEL_ID, CONF_CUSTOMER_ID
+from homeassistant.core import callback
+
+from .const import (
+    CARD_LABEL_MAX_LENGTH,
+    CONF_CARD_LABELS,
+    CONF_CHANNEL_ID,
+    CONF_CHARGE_STATION_ID,
+    CONF_CUSTOMER_ID,
+    DOMAIN,
+    charge_card_label,
+)
 
 EMAIL_USERNAME = "Email / Username"
 
@@ -31,6 +41,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for 50Five EV Charger."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> FiftyFiveOptionsFlow:
+        """Return the options flow handler."""
+        return FiftyFiveOptionsFlow()
 
     def __init__(self) -> None:
         """Initialize the config flow."""
@@ -260,4 +278,55 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_CHANNEL_ID: channel_id,
                 CONF_CUSTOMER_ID: self._customer_id,
             },
+        )
+
+
+class FiftyFiveOptionsFlow(config_entries.OptionsFlow):
+    """Let the user give each charge card a recognisable name (e.g. the car)."""
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Show one name field per charge card."""
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        cards = [
+            card
+            for card in ((coordinator.data or {}).get("charge_cards") if coordinator else None) or []
+            if card.get("id")
+        ]
+        if not cards:
+            return self.async_abort(reason="no_charge_cards")
+
+        current = dict(self.config_entry.options.get(CONF_CARD_LABELS) or {})
+        # Field keys are the default (unnamed) labels so the user can tell cards apart;
+        # they show provider + last four characters only, never the full card number.
+        fields = {charge_card_label(card, index): str(card["id"]) for index, card in enumerate(cards, start=1)}
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            labels = {
+                card_id: label
+                for field, card_id in fields.items()
+                if (label := str(user_input.get(field) or "").strip())
+            }
+            if any(len(label) > CARD_LABEL_MAX_LENGTH for label in labels.values()):
+                errors["base"] = "label_too_long"
+            else:
+                # Keep names of cards that are not currently on the account.
+                kept = {k: v for k, v in current.items() if k not in fields.values()}
+                return self.async_create_entry(
+                    data={**self.config_entry.options, CONF_CARD_LABELS: {**kept, **labels}}
+                )
+
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    field, description={"suggested_value": current.get(card_id, "")}
+                ): str
+                for field, card_id in fields.items()
+            }
+        )
+        return self.async_show_form(
+            step_id="init",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={"max_length": str(CARD_LABEL_MAX_LENGTH)},
         )

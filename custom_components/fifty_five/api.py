@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import aiohttp
@@ -27,6 +28,10 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+HISTORY_ITEMS_PER_PAGE = 30
+# Safety cap on history paging (HISTORY_ITEMS_PER_PAGE * HISTORY_MAX_PAGES sessions).
+HISTORY_MAX_PAGES = 20
 
 
 def _sanitize_payload_for_logging(payload: dict[str, Any]) -> dict[str, Any]:
@@ -368,42 +373,65 @@ class FiftyFiveApiClient:
         _LOGGER.debug("Active transaction result: %s", result)
         return result
 
-    async def get_charging_history(self, days: int = 30, items_per_page: int = 30) -> list[dict[str, Any]]:
-        """Get charging history for the charge station."""
-        from datetime import datetime, timedelta, timezone
-        
+    async def get_charging_history(
+        self, days: int = 30, items_per_page: int = HISTORY_ITEMS_PER_PAGE
+    ) -> list[dict[str, Any]]:
+        """Get the charging history for the charge station, following all pages."""
         now = datetime.now(timezone.utc)
         date_from = now - timedelta(days=days)
-        
+
         _LOGGER.debug(
             "Fetching charging history for station: %s, from: %s to: %s",
             self._charge_station_id,
             date_from.isoformat(),
             now.isoformat(),
         )
-        
-        data = await self._execute_query(
-            query=GET_CHARGING_HISTORY,
-            variables={
-                "getTransactionsFilters": {
-                    "dateFrom": date_from.isoformat(),
-                    "dateTo": now.isoformat(),
-                    "itemsPerPage": items_per_page,
-                    "page": 1,
-                    "chargeStation": {
-                        "id": self._charge_station_id,
+
+        items: list[dict[str, Any]] = []
+        seen_ids: set[Any] = set()
+        for page in range(1, HISTORY_MAX_PAGES + 1):
+            data = await self._execute_query(
+                query=GET_CHARGING_HISTORY,
+                variables={
+                    "getTransactionsFilters": {
+                        "dateFrom": date_from.isoformat(),
+                        "dateTo": now.isoformat(),
+                        "itemsPerPage": items_per_page,
+                        "page": page,
+                        "chargeStation": {
+                            "id": self._charge_station_id,
+                        },
+                    },
+                    "sort": {
+                        "startDate": "desc",
                     },
                 },
-                "sort": {
-                    "startDate": "desc",
-                },
-            },
-            operation_name="GetChargingHistory",
+                operation_name="GetChargingHistory",
+            )
+
+            transactions = data.get("getTransactions") or {}
+            page_items = transactions.get("items") or []
+            # Guard against a backend that ignores the page argument.
+            new_items = [
+                item
+                for item in page_items
+                if item.get("id") is None or item.get("id") not in seen_ids
+            ]
+            seen_ids.update(item.get("id") for item in new_items if item.get("id") is not None)
+            items.extend(new_items)
+
+            if not transactions.get("hasNext") or not new_items:
+                break
+        else:
+            _LOGGER.warning(
+                "Charging history has more than %d pages; only the newest %d transactions are used",
+                HISTORY_MAX_PAGES,
+                len(items),
+            )
+
+        _LOGGER.debug(
+            "Charging history result: %d transactions found over %d page(s)", len(items), page
         )
-        
-        transactions = data.get("getTransactions", {})
-        items = transactions.get("items", [])
-        _LOGGER.debug("Charging history result: %d transactions found", len(items))
         return items
 
     async def start_transaction(self, card: str = "") -> bool:
